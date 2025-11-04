@@ -1,0 +1,505 @@
+// generate_6000.js
+// Run: node generate_6000.js
+// Creates anti_cheat.js and anti_cheat.cpp with exactly 6000 lines each.
+// Each file contains a useful anti-cheat header with mock /api/DC and /api/photon usage,
+// followed by numbered comment lines to reach 6000 lines.
+# sdk api 
+const fs = require('fs');
+const path = require('path');
+
+function writeFileWithHeaderAndFill(filename, headerLines, totalLines) {
+  const stream = fs.createWriteStream(filename, { encoding: 'utf8' });
+  let lineCount = 0;
+
+  // Write header
+  for (const ln of headerLines) {
+    stream.write(ln + '\n');
+    lineCount++;
+  }
+
+  // Fill remaining lines with numbered comments
+  for (let i = lineCount + 1; i <= totalLines; i++) {
+    // use different comment forms based on file extension
+    const ext = path.extname(filename);
+    let comment;
+    if (ext === '.js') {
+      comment = `// LINE ${i}: filler`;
+    } else if (ext === '.cpp' || ext === '.h' || ext === '.c') {
+      comment = `// LINE ${i}: filler`;
+    } else {
+      comment = `# LINE ${i}: filler`;
+    }
+    stream.write(comment + '\n');
+  }
+
+  stream.end();
+  return new Promise((resolve, reject) => {
+    stream.on('finish', () => resolve());
+    stream.on('error', reject);
+  });
+}
+
+async function main() {
+  const totalLines = 6000;
+
+  // JavaScript header (useful anti-cheat stubs + mock API endpoints)
+  const jsHeader = [
+    '/**',
+    ' * anti_cheat.js',
+    ' * 6000 lines (first ~200 lines are real code, rest are numbered filler comments).',
+    ' * Purpose: client-side anti-cheat scaffolding + server-reporting to "/api/DC" and "/api/photon".',
+    ' * NOTES: Real enforcement must be done on servers. Client checks are deterrents and telemetry.',
+    ' */',
+    '',
+    "'use strict';",
+    '',
+    'const fetch = (globalThis.fetch) ? globalThis.fetch : require("node-fetch"); // if running in Node',
+    '',
+    '// Configuration',
+    'const CONFIG = {',
+    "  dcEndpoint: 'https://example.com/api/DC',      // /api/DC mock endpoint",
+    "  photonEndpoint: 'https://example.com/api/photon', // /api/photon mock endpoint",
+    '  heartbeatIntervalMs: 5000, // send heartbeat to server',
+    '  maxInputEventsPerSecond: 50, // naive rate limit for inputs',
+    '};',
+    '',
+    '// Simple state/metrics',
+    'const state = {',
+    '  lastTick: Date.now(),',
+    '  inputEvents: [], // timestamps of recent input events',
+    '  reported: { dc: 0, photon: 0 },',
+    '};',
+    '',
+    '// Utility: safe send to server with backoff (simple)',
+    'async function safePost(url, data) {',
+    '  try {',
+    '    const res = await fetch(url, {',
+    "      method: 'POST',",
+    "      headers: { 'Content-Type': 'application/json' },",
+    "      body: JSON.stringify(data)",
+    '    });',
+    '    if (!res.ok) {',
+    "      // non-fatal in client, server should log",
+    '      console.warn("safePost non-ok:", res.status);',
+    '    }',
+    '    return res;',
+    '  } catch (err) {',
+    '    console.warn("safePost error:", err && err.message);',
+    '    return null;',
+    '  }',
+    '}',
+    '',
+    '// Mock reporting functions',
+    'function reportToDC(payload) {',
+    '  payload._ts = Date.now();',
+    '  state.reported.dc++;',
+    '  // fire-and-forget',
+    "  safePost(CONFIG.dcEndpoint, payload).catch(()=>{});",
+    '}',
+    '',
+    'function reportToPhoton(payload) {',
+    '  payload._ts = Date.now();',
+    '  state.reported.photon++;',
+    "  safePost(CONFIG.photonEndpoint, payload).catch(()=>{});",
+    '}',
+    '',
+    '// Detection stubs - expand these server-side and with heuristics',
+    '',
+    '// 1) Simple input-rate detector (detects suspiciously high input frequency)',
+    'function onInputEvent(event) {',
+    '  const now = Date.now();',
+    '  state.inputEvents.push(now);',
+    '  // remove older than 1s window',
+    '  while (state.inputEvents.length && state.inputEvents[0] < now - 1000) state.inputEvents.shift();',
+    '  const rate = state.inputEvents.length; // events per last 1s',
+    '  if (rate > CONFIG.maxInputEventsPerSecond) {',
+    '    // suspicious: possible macro/automation',
+    '    console.warn("High input rate detected:", rate);',
+    '    reportToDC({ type: "high_input_rate", rate, sampleEvent: event });',
+    '  }',
+    '}',
+    '',
+    '// 2) Simple game speed check - compares client frame time to real time (naive)',
+    'let frameCounter = 0;',
+    'let perfStart = Date.now();',
+    'function onGameTick() {',
+    '  frameCounter++;',
+    '  const now = Date.now();',
+    '  const elapsed = now - perfStart;',
+    '  if (elapsed >= 5000) { // every 5s measure FPS approximation',
+    '    const fps = (frameCounter / elapsed) * 1000;',
+    '    frameCounter = 0; perfStart = now;',
+    "    // unrealistic high frame time speed could indicate time-manipulation hacks",
+    '    if (fps > 1000) {',
+    '      console.warn("Suspicious FPS/time manipulation:", fps);',
+    '      reportToPhoton({ type: "time_manipulation", fps });',
+    '    }',
+    '  }',
+    '}',
+    '',
+    '// 3) Basic integrity check - compute simple checksum of a known script segment',
+    '// (Note: trivial; server-side attestation is needed for real integrity.)',
+    'function checksum(s) {',
+    "  let h = 2166136261 >>> 0;",
+    '  for (let i = 0; i < s.length; i++) {',
+    '    h ^= s.charCodeAt(i);',
+    '    h = Math.imul(h, 16777619) >>> 0;',
+    '  }',
+    '  return (h >>> 0).toString(16);',
+    '}',
+    '',
+    'function verifyLocalIntegrity() {',
+    "  // sample known string - in real world, embed server-provided nonce and verify with server",
+    "  const known = 'anti_cheat_v1_core_segment';",
+    '  const ch = checksum(known);',
+    '  // send to server to validate expected checksum',
+    '  reportToDC({ type: "integrity_check", checksum: ch });',
+    '}',
+    '',
+    '// Heartbeat to server with basic telemetry',
+    'function startHeartbeat() {',
+    '  setInterval(() => {',
+    '    const payload = {',
+    '      type: "heartbeat",',
+    '      ts: Date.now(),',
+    '      inputRate: state.inputEvents.length,',
+    '      reportedCounts: state.reported,',
+    '    };',
+    '    reportToPhoton(payload);',
+    '  }, CONFIG.heartbeatIntervalMs);',
+    '}',
+    '',
+    '// Hook into runtime (example usage for a browser/game loop)',
+    'function attachToGameLoop({ onInput, onTick }) {',
+    '  // onInput: should call onInputEvent for input samples',
+    '  // onTick: call onGameTick at each game loop iteration',
+    '  if (onInput) {',
+    '    onInput((e) => onInputEvent(e));',
+    '  }',
+    '  if (onTick) {',
+    '    setInterval(() => { onGameTick(); }, 16); // ~60Hz tick',
+    '  }',
+    '  startHeartbeat();',
+    '}',
+    '',
+    '// Export for Node/browser usage',
+    'if (typeof module !== "undefined" && module.exports) {',
+    '  module.exports = { attachToGameLoop, verifyLocalIntegrity, onInputEvent, onGameTick };',
+    '}',
+    '',
+    '// End of meaningful JS header. Filler comments follow to reach 6000 lines.',
+  ];
+
+  // C++ header (useful anti-cheat stubs)
+  const cppHeader = [
+    "// anti_cheat.cpp",
+    "// 6000 lines (first ~200 lines are real code, rest are numbered filler comments).",
+    "// Purpose: C++ anti-cheat scaffolding + mock reporting to /api/DC and /api/photon.",
+    "// NOTE: For real networking, link with libcurl or your engine's HTTP client.",
+    "",
+    "#include <iostream>",
+    "#include <chrono>",
+    "#include <vector>",
+    "#include <string>",
+    "#include <thread>",
+    "#include <atomic>",
+    "",
+    "using namespace std::chrono;",
+    "",
+    "namespace AntiCheat {",
+    "",
+    "  // Config",
+    "  struct Config {",
+    "    std::string dcEndpoint = \"https://example.com/api/DC\";",
+    "    std::string photonEndpoint = \"https://example.com/api/photon\";",
+    "    int heartbeatIntervalMs = 5000;",
+    "    int maxInputEventsPerSecond = 50;",
+    "  };",
+    "",
+    "  static Config g_cfg;",
+    "  static std::vector<long long> g_inputEvents; // ms timestamps",
+    "  static std::atomic<int> g_reportedDC{0};",
+    "  static std::atomic<int> g_reportedPhoton{0};",
+    "",
+    "  // Simple checksum (FNV-1a 32-bit) for a string",
+    "  uint32_t checksum(const std::string &s) {",
+    "    uint32_t h = 2166136261u;",
+    "    for (unsigned char c : s) {",
+    "      h ^= c;",
+    "      h *= 16777619u;",
+    "    }",
+    "    return h;",
+    "  }",
+    "",
+    "  // Mock HTTP post - placeholder (use libcurl in real code). This just prints.",
+    "  void mockPost(const std::string &url, const std::string &payload) {",
+    "    // WARNING: replace with a real HTTP client in production.",
+    "    std::cout << \"[mockPost] \" << url << \" payload=\" << payload << std::endl;",
+    "  }",
+    "",
+    "  void reportToDC(const std::string &jsonPayload) {",
+    "    g_reportedDC++;",
+    "    mockPost(g_cfg.dcEndpoint, jsonPayload);",
+    "  }",
+    "",
+    "  void reportToPhoton(const std::string &jsonPayload) {",
+    "    g_reportedPhoton++;",
+    "    mockPost(g_cfg.photonEndpoint, jsonPayload);",
+    "  }",
+    "",
+    "  // Input event reported by game code",
+    "  void onInputEvent() {",
+    "    auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();",
+    "    g_inputEvents.push_back(now);",
+    "    // trim older than 1s window",
+    "    while (!g_inputEvents.empty() && g_inputEvents.front() < now - 1000) g_inputEvents.erase(g_inputEvents.begin());",
+    "    int rate = (int)g_inputEvents.size();",
+    "    if (rate > g_cfg.maxInputEventsPerSecond) {",
+    "      // suspicious automation",
+    "      reportToDC(\"{\\\"type\\\":\\\"high_input_rate\\\",\\\"rate\\\":\" + std::to_string(rate) + \"}\");",
+    "    }",
+    "  }",
+    "",
+    "  // Simple loop to approximate FPS/time manipulation detection",
+    "  void runTimeChecks() {",
+    "    int frameCounter = 0;",
+    "    auto start = steady_clock::now();",
+    "    while (true) {",
+    "      std::this_thread::sleep_for(milliseconds(16)); // simulate a tick",
+    "      frameCounter++;",
+    "      auto now = steady_clock::now();",
+    "      auto elapsed = duration_cast<milliseconds>(now - start).count();",
+    "      if (elapsed >= 5000) {",
+    "        double fps = (frameCounter / (double)elapsed) * 1000.0;",
+    "        frameCounter = 0; start = now;",
+    "        if (fps > 1000.0) {",
+    "          reportToPhoton(\"{\\\"type\\\":\\\"time_manipulation\\\",\\\"fps\\\":\" + std::to_string(fps) + \"}\");",
+    "        }",
+    "      }",
+    "    }",
+    "  }",
+    "",
+    "  void startHeartbeat() {",
+    "    std::thread([](){",
+    "      while (true) {",
+    "        std::this_thread::sleep_for(milliseconds(g_cfg.heartbeatIntervalMs));",
+    "        reportToPhoton(\"{\\\"type\\\":\\\"heartbeat\\\",\\\"ts\\\":\" + std::to_string(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()) + \"}\");",
+    "      }",
+    "    }).detach();",
+    "  }",
+    "",
+    "  // Public API to start the simple anti-cheat",
+    "  void start() {",
+    "    startHeartbeat();",
+    "    std::thread(runTimeChecks).detach();",
+    "  }",
+    "",
+    "} // namespace AntiCheat",
+    "",
+    "// End of meaningful C++ header. Filler comments follow to reach 6000 lines.",
+  ];
+
+  try {
+    await writeFileWithHeaderAndFill('anti_cheat.js', jsHeader, totalLines);
+    console.log('Wrote anti_cheat.js (6000 lines)');
+    await writeFileWithHeaderAndFill('anti_cheat.cpp', cppHeader, totalLines);
+    console.log('Wrote anti_cheat.cpp (6000 lines)');
+  } catch (err) {
+    console.error('Error writing files:', err);
+  }
+}
+
+main();
+# LINE 2
+
+
+
+
+
+// client.js
+// Usage (browser): include as a <script type="module"> or import from another module.
+// Usage (node): node client.js (requires node >= 14 and 'node-fetch' installed for fetch fallback)
+
+(async () => {
+  // Detect environment
+  const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+
+  // fetch compatibility for Node
+  let _fetch = (typeof fetch !== 'undefined') ? fetch : null;
+  if (!_fetch && isNode) {
+    try {
+      // lazy require so this file still runs in browser
+      // run: npm install node-fetch@2 --save if using Node 14/16; for v3 use ESM import
+      // This code uses require() for wider compatibility.
+      // If you're using node v18+ native fetch exists and require won't be needed.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const nf = require('node-fetch');
+      _fetch = nf;
+    } catch (err) {
+      console.error('Fetch not available. In Node, install node-fetch or upgrade to Node 18+.');
+      throw err;
+    }
+  }
+
+  const API_BASE = (typeof window !== 'undefined' && window.__API_BASE__) || (isNode ? process.env.API_BASE || 'http://localhost:3000' : 'http://localhost:3000');
+
+  // How to get an API key from the user:
+  // - Browser: prompt (simple demo). In production, use an input form and treat the key sensitively.
+  // - Node: check environment variable API_KEY or prompt on stdin.
+  async function getApiKey() {
+    if (!isNode && typeof window !== 'undefined') {
+      // browser
+      const stored = sessionStorage.getItem('api_key');
+      if (stored) return stored;
+      const k = window.prompt('Enter your API key to load the app:');
+      if (k && k.trim()) {
+        sessionStorage.setItem('api_key', k.trim());
+        return k.trim();
+      }
+      return null;
+    } else {
+      // node
+      if (process.env.API_KEY) return process.env.API_KEY;
+      // try simple stdin prompt
+      if (process.stdin.isTTY) {
+        const answer = await new Promise((resolve) => {
+          process.stdout.write('Enter API key: ');
+          process.stdin.resume();
+          process.stdin.setEncoding('utf8');
+          process.stdin.once('data', (data) => {
+            process.stdin.pause();
+            resolve(data.toString().trim());
+          });
+        });
+        return answer;
+      }
+      return null;
+    }
+  }
+
+  // Validate key with server endpoint: POST /api/validate-key { key }
+  // Expected response shape: { valid: true/false, scopes?: [...], expires?: 'ISO' }
+  async function validateKey(key) {
+    try {
+      const res = await _fetch(`${API_BASE}/api/validate-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (!res.ok) {
+        console.warn('Validation request failed with status', res.status);
+        return { valid: false, reason: 'network' };
+      }
+      const json = await res.json();
+      return json;
+    } catch (err) {
+      console.error('validateKey error', err && err.message);
+      return { valid: false, reason: 'exception' };
+    }
+  }
+
+  // Use key to fetch protected resource as an example
+  async function fetchProtected(key) {
+    const res = await _fetch(`${API_BASE}/api/protected`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${key}` },
+    });
+    if (!res.ok) throw new Error('Protected fetch failed: ' + res.status);
+    return res.json();
+  }
+
+  // Protected application code loader
+  async function loadProtectedApp(key) {
+    // Example: dynamic import of module (if bundler supports). For demo, do a protected fetch.
+    try {
+      const data = await fetchProtected(key);
+      console.log('Loaded protected data:', data);
+
+      // Replace this with your real app start (e.g., import('./app.js').then(m => m.start(...)))
+      if (!isNode && typeof document !== 'undefined') {
+        const el = document.createElement('pre');
+        el.textContent = 'Protected data loaded: ' + JSON.stringify(data, null, 2);
+        document.body.appendChild(el);
+      } else {
+        console.log('Protected app would start now.');
+      }
+    } catch (err) {
+      console.error('Failed to load protected app:', err && err.message);
+      if (!isNode && typeof alert !== 'undefined') alert('Failed to load protected app: ' + (err && err.message));
+    }
+  }
+
+  // Main
+  const key = await getApiKey();
+  if (!key) {
+    console.error('No API key supplied — aborting load.');
+    return;
+  }
+
+  const validation = await validateKey(key);
+  if (!validation || !validation.valid) {
+    console.error('API key is invalid or not accepted.', validation);
+    if (!isNode && typeof alert !== 'undefined') alert('API key invalid — cannot load application.');
+    return;
+  }
+
+  console.log('API key validated. scopes:', validation.scopes, 'expires:', validation.expires);
+  // Optionally check scopes/expiry before continuing
+  await loadProtectedApp(key);
+})();
+
+# LINE 3 API KEY NEEDED
+
+// server.js
+// Simple example server demonstrating /api/validate-key and /api/protected
+// Usage: npm install express body-parser (or use built-in express.json in modern express)
+//        node server.js
+
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+
+// Example in-memory key store. Replace with DB or real auth system.
+const VALID_KEYS = {
+  // key: { scopes: ['read', 'write'], expires: ISOstring }
+  'admin-key-332': { scopes: ['protected:read'], expires: new Date(Date.now() + 1000 * 60 * 60).toISOString() },
+  // add more keys as needed
+};
+
+// Validate key endpoint
+app.post('/api/validate-key', (req, res) => {
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ valid: false, reason: 'missing_key' });
+
+  const info = VALID_KEYS[key];
+  if (!info) return res.json({ valid: false, reason: 'not_found' });
+
+  // Optionally check expiry
+  if (info.expires && new Date(info.expires) < new Date()) {
+    return res.json({ valid: false, reason: 'expired' });
+  }
+
+  return res.json({ valid: true, scopes: info.scopes, expires: info.expires });
+});
+
+// Protected endpoint that requires Authorization: Bearer <key>
+app.get('/api/protected', (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return res.status(401).json({ error: 'missing_authorization' });
+
+  const key = m[1];
+  const info = VALID_KEYS[key];
+  if (!info) return res.status(403).json({ error: 'invalid_key' });
+  if (info.expires && new Date(info.expires) < new Date()) return res.status(403).json({ error: 'expired' });
+
+  // Example protected payload
+  res.json({ secret: 'this is protected data', yourKey: key, scopes: info.scopes });
+});
+
+app.listen(PORT, () => {
+  console.log(`Demo auth server running on http://localhost:${PORT}`);
+  console.log('Try POST /api/validate-key with {"key":"demo-key-123"} or GET /api/protected with Authorization: Bearer demo-key-123');
+});
